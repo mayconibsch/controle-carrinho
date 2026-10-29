@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Controle Arduino HC-06</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    * {
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: manipulation;
+    }
+    body {
+      background-color: #0f172a;
+      overscroll-behavior: none;
+    }
+    .btn-touch {
+      transition: transform 0.05s ease, background-color 0.1s ease;
+      touch-action: none;
+    }
+    .btn-touch:active, .btn-touch.active {
+      transform: scale(0.92);
+      background-color: #2563eb !important;
+      border-color: #60a5fa !important;
+    }
+  </style>
+</head>
+<body class="text-slate-100 min-h-screen flex flex-col justify-between p-4 max-w-md mx-auto">
+
+  <!-- HEADER DE CONEXÃO -->
+  <header class="bg-slate-800/80 backdrop-blur border border-slate-700 p-3 rounded-2xl flex items-center justify-between shadow-lg">
+    <div>
+      <h1 class="font-bold text-sm text-cyan-400 flex items-center gap-1.5">
+        <i data-lucide="bot" class="w-4 h-4"></i> CARRINHO HC-06
+      </h1>
+      <div class="flex items-center gap-2 mt-1">
+        <span id="statusLed" class="w-2.5 h-2.5 rounded-full bg-red-500"></span>
+        <span id="statusText" class="text-xs text-slate-400 font-mono">Desconectado</span>
+      </div>
+    </div>
+    <button id="connectBtn" onclick="toggleBluetooth()" class="px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 active:scale-95 text-xs font-bold flex items-center gap-1.5 transition-all">
+      <i data-lucide="bluetooth" class="w-4 h-4"></i>
+      <span id="btnText">CONECTAR</span>
+    </button>
+  </header>
+
+  <!-- CONTROLE DE VELOCIDADE PWM -->
+  <section class="bg-slate-800/50 border border-slate-700/60 p-3.5 rounded-2xl my-3">
+    <div class="flex justify-between items-center mb-2">
+      <span class="text-xs font-semibold text-slate-400 flex items-center gap-1">
+        <i data-lucide="gauge" class="w-4 h-4 text-cyan-400"></i> VELOCIDADE PWM
+      </span>
+      <span id="speedVal" class="text-xs font-mono font-bold text-cyan-400">100%</span>
+    </div>
+    <input type="range" id="speedSlider" min="0" max="100" value="100" oninput="updateSpeed(this.value)"
+           class="w-full h-2 bg-slate-900 rounded-lg appearance-none cursor-pointer accent-cyan-400">
+    <div class="grid grid-cols-4 gap-2 mt-2">
+      <button onclick="setSpeedPreset(25)" class="py-1 bg-slate-700/50 rounded text-[10px] font-mono text-slate-300">25%</button>
+      <button onclick="setSpeedPreset(50)" class="py-1 bg-slate-700/50 rounded text-[10px] font-mono text-slate-300">50%</button>
+      <button onclick="setSpeedPreset(75)" class="py-1 bg-slate-700/50 rounded text-[10px] font-mono text-slate-300">75%</button>
+      <button onclick="setSpeedPreset(100)" class="py-1 bg-cyan-950 border border-cyan-800 rounded text-[10px] font-mono text-cyan-300">100%</button>
+    </div>
+  </section>
+
+  <!-- PAINEL DIRECIONAL D-PAD -->
+  <section class="flex items-center justify-center my-auto">
+    <div class="grid grid-cols-3 gap-3 w-full max-w-[280px] aspect-square">
+      <div></div>
+      <!-- FRENTE -->
+      <button onmousedown="handleStart('F', this)" onmouseup="handleEnd(this)"
+              ontouchstart="handleStart('F', this, event)" ontouchend="handleEnd(this, event)"
+              class="btn-touch bg-slate-800 border-2 border-slate-700 rounded-2xl flex flex-col items-center justify-center text-cyan-400">
+        <i data-lucide="chevron-up" class="w-10 h-10"></i>
+        <span class="text-[9px] font-bold">FRENTE</span>
+      </button>
+      <div></div>
+
+      <!-- ESQUERDA -->
+      <button onmousedown="handleStart('L', this)" onmouseup="handleEnd(this)"
+              ontouchstart="handleStart('L', this, event)" ontouchend="handleEnd(this, event)"
+              class="btn-touch bg-slate-800 border-2 border-slate-700 rounded-2xl flex flex-col items-center justify-center text-cyan-400">
+        <i data-lucide="chevron-left" class="w-10 h-10"></i>
+        <span class="text-[9px] font-bold">ESQ</span>
+      </button>
+
+      <!-- PARAR (EMERGÊNCIA) -->
+      <button onclick="sendCmd('S')"
+              class="btn-touch bg-red-950/80 border-2 border-red-600 rounded-2xl flex flex-col items-center justify-center text-red-400">
+        <i data-lucide="square" class="w-7 h-7"></i>
+        <span class="text-[9px] font-bold mt-1">PARAR</span>
+      </button>
+
+      <!-- DIREITA -->
+      <button onmousedown="handleStart('R', this)" onmouseup="handleEnd(this)"
+              ontouchstart="handleStart('R', this, event)" ontouchend="handleEnd(this, event)"
+              class="btn-touch bg-slate-800 border-2 border-slate-700 rounded-2xl flex flex-col items-center justify-center text-cyan-400">
+        <i data-lucide="chevron-right" class="w-10 h-10"></i>
+        <span class="text-[9px] font-bold">DIR</span>
+      </button>
+
+      <div></div>
+      <!-- TRÁS -->
+      <button onmousedown="handleStart('B', this)" onmouseup="handleEnd(this)"
+              ontouchstart="handleStart('B', this, event)" ontouchend="handleEnd(this, event)"
+              class="btn-touch bg-slate-800 border-2 border-slate-700 rounded-2xl flex flex-col items-center justify-center text-cyan-400">
+        <i data-lucide="chevron-down" class="w-10 h-10"></i>
+        <span class="text-[9px] font-bold">TRÁS</span>
+      </button>
+      <div></div>
+    </div>
+  </section>
+
+  <!-- AÇÕES EXTRAS & TERMINAL -->
+  <section class="mt-4 flex flex-col gap-3">
+    <div class="grid grid-cols-2 gap-2">
+      <button id="btnLight" onclick="toggleLight()" class="bg-slate-800 border border-slate-700 p-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 text-slate-300">
+        <i data-lucide="lightbulb" class="w-4 h-4" id="lightIcon"></i> FAROL
+      </button>
+      <button onmousedown="sendCmd('V')" onmouseup="sendCmd('v')"
+              ontouchstart="sendCmd('V')" ontouchend="sendCmd('v')"
+              class="bg-slate-800 border border-slate-700 p-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 text-slate-300 active:text-yellow-400">
+        <i data-lucide="volume-2" class="w-4 h-4"></i> BUZINA
+      </button>
+    </div>
+
+    <!-- LOG DE COMANDOS -->
+    <div class="bg-slate-950 border border-slate-800 rounded-xl p-2 h-20 overflow-y-auto text-[10px] font-mono text-slate-400 flex flex-col gap-0.5" id="consoleLog">
+      <div class="text-slate-600">> Pronto para conectar ao HC-06...</div>
+    </div>
+  </section>
+
+  <script>
+    lucide.createIcons();
+
+    let bluetoothDevice = null;
+    let rxTxCharacteristic = null;
+    let isConnected = false;
+    let currentCmd = null;
+    let lightState = false;
+
+    // UUID Serial SPP Padrão do HC-06
+    const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
+
+    async function toggleBluetooth() {
+      if (isConnected) {
+        if (bluetoothDevice && bluetoothDevice.gatt.connected) {
+          bluetoothDevice.gatt.disconnect();
+        }
+        setConnectedUI(false);
+        return;
+      }
+
+      if (!navigator.bluetooth) {
+        log("ERRO: Navegador sem suporte a Web Bluetooth. Use o Chrome no Android.", "red");
+        return;
+      }
+
+      try {
+        log("Procurando HC-06...");
+        bluetoothDevice = await navigator.bluetooth.requestDevice({
+          acceptAllDevices: true,
+          optionalServices: [SPP_UUID]
+        });
+
+        bluetoothDevice.addEventListener('gattserverdisconnected', () => setConnectedUI(false));
+
+        log("Conectando ao GATT...");
+        const server = await bluetoothDevice.gatt.connect();
+        const service = await server.getPrimaryService(SPP_UUID);
+        rxTxCharacteristic = await service.getCharacteristic(SPP_UUID);
+
+        setConnectedUI(true);
+        log("Conectado com sucesso ao " + (bluetoothDevice.name || "HC-06"), "green");
+
+        // Envia velocidade padrão inicial
+        updateSpeed(document.getElementById('speedSlider').value);
+
+      } catch (err) {
+        log("Falha: " + err.message, "red");
+        setConnectedUI(false);
+      }
+    }
+
+    async function sendCmd(cmd) {
+      log("CMD -> " + cmd);
+      if (!isConnected || !rxTxCharacteristic) return;
+
+      try {
+        const encoder = new TextEncoder();
+        await rxTxCharacteristic.writeValue(encoder.encode(cmd));
+      } catch (e) {
+        log("Erro ao enviar: " + e.message, "red");
+      }
+    }
+
+    function handleStart(cmd, el, ev) {
+      if (ev && ev.cancelable) ev.preventDefault();
+      el.classList.add('active');
+      currentCmd = cmd;
+      sendCmd(cmd);
+    }
+
+    function handleEnd(el, ev) {
+      if (ev && ev.cancelable) ev.preventDefault();
+      el.classList.remove('active');
+      if (currentCmd !== null) {
+        currentCmd = null;
+        sendCmd('S'); // S = Parar
+      }
+    }
+
+    function updateSpeed(val) {
+      document.getElementById('speedVal').innerText = val + "%";
+      const step = Math.floor((val / 100) * 9).toString(); // Mapeia 0-100% para '0'-'9'
+      sendCmd(step);
+    }
+
+    function setSpeedPreset(val) {
+      document.getElementById('speedSlider').value = val;
+      updateSpeed(val);
+    }
+
+    function toggleLight() {
+      lightState = !lightState;
+      const btn = document.getElementById('btnLight');
+      const icon = document.getElementById('lightIcon');
+      
+      if (lightState) {
+        sendCmd('W');
+        btn.classList.add('text-yellow-400', 'border-yellow-500/50');
+      } else {
+        sendCmd('w');
+        btn.classList.remove('text-yellow-400', 'border-yellow-500/50');
+      }
+    }
+
+    function setConnectedUI(connected) {
+      isConnected = connected;
+      const led = document.getElementById('statusLed');
+      const text = document.getElementById('statusText');
+      const btnText = document.getElementById('btnText');
+
+      if (connected) {
+        led.className = "w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_#10b981]";
+        text.innerText = bluetoothDevice ? bluetoothDevice.name : "Conectado";
+        text.className = "text-xs text-emerald-400 font-mono";
+        btnText.innerText = "DESCONECTAR";
+      } else {
+        led.className = "w-2.5 h-2.5 rounded-full bg-red-500";
+        text.innerText = "Desconectado";
+        text.className = "text-xs text-slate-400 font-mono";
+        btnText.innerText = "CONECTAR";
+        rxTxCharacteristic = null;
+      }
+    }
+
+    function log(msg, color = "") {
+      const box = document.getElementById('consoleLog');
+      const item = document.createElement('div');
+      if (color === "red") item.className = "text-red-400";
+      if (color === "green") item.className = "text-emerald-400";
+      item.innerText = "> " + msg;
+      box.appendChild(item);
+      box.scrollTop = box.scrollHeight;
+    }
+  </script>
+</body>
+</html>
